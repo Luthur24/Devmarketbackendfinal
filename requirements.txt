@@ -1,0 +1,9 @@
+Flask
+flask-cors
+psycopg2-binary
+bcrypt
+PyJWT
+cloudinary
+requests
+gunicorn
+python-env
