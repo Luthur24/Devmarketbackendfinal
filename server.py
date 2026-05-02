@@ -58,25 +58,20 @@ cloudinary.config(
 # ─────────────────────────────────────────────
 app = Flask(__name__)
 app.secret_key = JWT_SECRET
+
+# Allow requests from any origin (GitHub Pages, file://, custom domains, etc.)
 CORS(app, resources={r"/api/*": {
-    "origins": ["http://localhost:5000", "http://127.0.0.1:5000",
-                "http://localhost:3000", "http://127.0.0.1:3000",
-                "null"],  # "null" covers file:// origin
-    "supports_credentials": True,
+    "origins": "*",
+    "supports_credentials": False,
     "allow_headers": ["Content-Type", "Authorization"],
     "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
 }})
-# Also allow all origins without credentials for public endpoints
+
 @app.after_request
 def after_request(response):
-    origin = request.headers.get('Origin', '')
-    if origin:
-        response.headers['Access-Control-Allow-Origin'] = origin
-    else:
-        response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Origin'] = '*'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
     response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
-    response.headers['Access-Control-Allow-Credentials'] = 'true'
     return response
 
 
