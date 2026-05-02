@@ -118,6 +118,30 @@ def init_db():
         )
     """)
 
+    # Migrate: add columns that may be missing on an existing devmarket_users table
+    for _col in [
+        "ALTER TABLE devmarket_users ADD COLUMN IF NOT EXISTS is_online BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE devmarket_users ADD COLUMN IF NOT EXISTS location VARCHAR(100)",
+        "ALTER TABLE devmarket_users ADD COLUMN IF NOT EXISTS badge VARCHAR(50) DEFAULT 'newcomer'",
+        "ALTER TABLE devmarket_users ADD COLUMN IF NOT EXISTS cover_url TEXT",
+        "ALTER TABLE devmarket_users ADD COLUMN IF NOT EXISTS github_url TEXT",
+        "ALTER TABLE devmarket_users ADD COLUMN IF NOT EXISTS website_url TEXT",
+        "ALTER TABLE devmarket_users ADD COLUMN IF NOT EXISTS twitter_url TEXT",
+        "ALTER TABLE devmarket_users ADD COLUMN IF NOT EXISTS linkedin_url TEXT",
+        "ALTER TABLE devmarket_users ADD COLUMN IF NOT EXISTS skills TEXT[]",
+        "ALTER TABLE devmarket_users ADD COLUMN IF NOT EXISTS reputation_score INTEGER DEFAULT 0",
+        "ALTER TABLE devmarket_users ADD COLUMN IF NOT EXISTS total_sales INTEGER DEFAULT 0",
+        "ALTER TABLE devmarket_users ADD COLUMN IF NOT EXISTS total_purchases INTEGER DEFAULT 0",
+        "ALTER TABLE devmarket_users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE devmarket_users ADD COLUMN IF NOT EXISTS bio TEXT",
+        "ALTER TABLE devmarket_users ADD COLUMN IF NOT EXISTS full_name VARCHAR(100)",
+        "ALTER TABLE devmarket_users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'buyer'",
+    ]:
+        try:
+            cur.execute(_col)
+        except Exception:
+            pass
+
     # Categories
     cur.execute("""
         CREATE TABLE IF NOT EXISTS devmarket_categories (
@@ -459,7 +483,13 @@ def login():
         if not bcrypt.checkpw(password.encode('utf-8'), user['password_hash'].encode('utf-8')):
             return jsonify({'error': 'Invalid credentials'}), 401
 
-        cur.execute("UPDATE devmarket_users SET last_active=NOW(), is_online=TRUE WHERE id=%s", (user['id'],))
+        try:
+            cur.execute("UPDATE devmarket_users SET last_active=NOW(), is_online=TRUE WHERE id=%s", (user['id'],))
+        except Exception:
+            try:
+                cur.execute("UPDATE devmarket_users SET last_active=NOW() WHERE id=%s", (user['id'],))
+            except Exception:
+                pass
         token = generate_token(user['id'])
 
         safe_user = {
@@ -1442,20 +1472,24 @@ def get_dashboard_stats(current_user_id):
 @app.route('/api/stats', methods=['GET'])
 def get_platform_stats():
     conn = get_db()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    try:
-        cur.execute("SELECT COUNT(*) FROM devmarket_users")
-        users = cur.fetchone()['count']
-        cur.execute("SELECT COUNT(*) FROM devmarket_products WHERE is_active=TRUE")
-        products = cur.fetchone()['count']
-        cur.execute("SELECT COUNT(*) FROM devmarket_orders")
-        orders = cur.fetchone()['count']
-        cur.execute("SELECT SUM(downloads) FROM devmarket_products")
-        downloads = cur.fetchone()['sum'] or 0
-        return jsonify({'users': users, 'products': products, 'orders': orders, 'downloads': downloads})
-    finally:
-        cur.close()
-        conn.close()
+    stats = {'users': 0, 'products': 0, 'orders': 0, 'downloads': 0}
+    queries = [
+        ('users',     "SELECT COUNT(*) as n FROM devmarket_users"),
+        ('products',  "SELECT COUNT(*) as n FROM devmarket_products WHERE is_active=TRUE"),
+        ('orders',    "SELECT COUNT(*) as n FROM devmarket_orders"),
+        ('downloads', "SELECT COALESCE(SUM(downloads),0) as n FROM devmarket_products"),
+    ]
+    for key, sql in queries:
+        try:
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cur.execute(sql)
+            row = cur.fetchone()
+            stats[key] = int(row['n']) if row else 0
+            cur.close()
+        except Exception:
+            pass
+    conn.close()
+    return jsonify(stats)
 
 
 # ─────────────────────────────────────────────
@@ -1606,7 +1640,10 @@ def logout(current_user_id):
     conn = get_db()
     cur = conn.cursor()
     try:
-        cur.execute("UPDATE devmarket_users SET is_online=FALSE WHERE id=%s", (current_user_id,))
+        try:
+            cur.execute("UPDATE devmarket_users SET is_online=FALSE WHERE id=%s", (current_user_id,))
+        except Exception:
+            pass
         return jsonify({'message': 'Logged out successfully'})
     finally:
         cur.close()
@@ -1749,9 +1786,23 @@ def health():
 
 
 # ─────────────────────────────────────────────
-# MAIN
+# MAIN — init runs at module level so gunicorn triggers it
 # ─────────────────────────────────────────────
+try:
+    init_db()
+    print("✅ DB init complete")
+except Exception as _e:
+    print(f"⚠️  DB init error (non-fatal): {_e}")
+
+# Manual re-init endpoint (call via Render shell or browser to force schema sync)
+@app.route('/api/init', methods=['GET'])
+def manual_init():
+    try:
+        init_db()
+        return jsonify({'status': 'ok', 'message': 'Database initialized/migrated successfully'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
 if __name__ == '__main__':
     print("🚀 Starting Devmarket API Server...")
-    init_db()
     app.run(host='0.0.0.0', port=5000, debug=True)
