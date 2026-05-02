@@ -40,7 +40,7 @@ MISTRAL_API_KEY = "yjvknUyDmAP6SKLQAUtqM5FH65cP69Id"
 MISTRAL_API_URL = "https://api.mistral.ai/v1/chat/completions"
 
 # Tavily Search
-TAVILY_API_KEY = "Tvly-dev-3WFoka-wiApk22PORqurQV6YPKo0h2vvIktfbT773rzqPxX04"
+TAVILY_API_KEY = "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"
 TAVILY_API_URL = "https://api.tavily.com/search"
 
 # ─────────────────────────────────────────────
@@ -58,7 +58,26 @@ cloudinary.config(
 # ─────────────────────────────────────────────
 app = Flask(__name__)
 app.secret_key = JWT_SECRET
-CORS(app, origins="*", supports_credentials=True)
+CORS(app, resources={r"/api/*": {
+    "origins": ["http://localhost:5000", "http://127.0.0.1:5000",
+                "http://localhost:3000", "http://127.0.0.1:3000",
+                "null"],  # "null" covers file:// origin
+    "supports_credentials": True,
+    "allow_headers": ["Content-Type", "Authorization"],
+    "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+}})
+# Also allow all origins without credentials for public endpoints
+@app.after_request
+def after_request(response):
+    origin = request.headers.get('Origin', '')
+    if origin:
+        response.headers['Access-Control-Allow-Origin'] = origin
+    else:
+        response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+    response.headers['Access-Control-Allow-Credentials'] = 'true'
+    return response
 
 
 # ─────────────────────────────────────────────
@@ -66,7 +85,7 @@ CORS(app, origins="*", supports_credentials=True)
 # ─────────────────────────────────────────────
 def get_db():
     conn = psycopg2.connect(DB_URL)
-    conn.autocommit = True
+    conn.autocommit = True  # Each statement auto-commits; simpler for this architecture
     return conn
 
 
@@ -406,10 +425,12 @@ def register():
     try:
         cur.execute(
             """INSERT INTO devmarket_users (username, email, password_hash, full_name, role)
-               VALUES (%s, %s, %s, %s, 'seller') RETURNING id, username, email, full_name, role""",
+               VALUES (%s, %s, %s, %s, 'seller')
+               RETURNING id, username, email, full_name, role, avatar_url, badge, reputation_score, is_verified""",
             (username, email, password_hash, full_name)
         )
         user = dict(cur.fetchone())
+        user['id'] = str(user['id'])
         token = generate_token(user['id'])
         return jsonify({'token': token, 'user': user}), 201
     except psycopg2.IntegrityError as e:
@@ -438,10 +459,10 @@ def login():
         )
         user = cur.fetchone()
         if not user:
-            return jsonify({'error': 'User not found'}), 404
+            return jsonify({'error': 'Invalid credentials'}), 401
 
         if not bcrypt.checkpw(password.encode('utf-8'), user['password_hash'].encode('utf-8')):
-            return jsonify({'error': 'Invalid password'}), 401
+            return jsonify({'error': 'Invalid credentials'}), 401
 
         cur.execute("UPDATE devmarket_users SET last_active=NOW(), is_online=TRUE WHERE id=%s", (user['id'],))
         token = generate_token(user['id'])
@@ -454,7 +475,10 @@ def login():
             'avatar_url': user['avatar_url'],
             'role': user['role'],
             'badge': user['badge'],
-            'reputation_score': user['reputation_score']
+            'reputation_score': user['reputation_score'],
+            'is_verified': user['is_verified'],
+            'total_sales': user['total_sales'],
+            'location': user['location']
         }
         return jsonify({'token': token, 'user': safe_user})
     finally:
@@ -691,9 +715,11 @@ def get_product(current_user_id, product_id_or_slug):
 
         product = dict(product)
         product['id'] = str(product['id'])
+        product['seller_id'] = str(product['seller_id']) if product.get('seller_id') else None
+        product['category_id'] = str(product['category_id']) if product.get('category_id') else None
 
-        # Increment views
-        cur.execute("UPDATE devmarket_products SET views = views + 1 WHERE id = %s", (product['id'],))
+        # Increment views (use original UUID from DB, not str)
+        cur.execute("UPDATE devmarket_products SET views = views + 1 WHERE id::text = %s", (product['id'],))
 
         # Get reviews
         cur.execute("""
@@ -843,18 +869,18 @@ def toggle_bookmark(current_user_id, product_id):
     conn = get_db()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT 1 FROM devmarket_bookmarks WHERE user_id=%s AND product_id=%s",
+        cur.execute("SELECT 1 FROM devmarket_bookmarks WHERE user_id=%s::uuid AND product_id=%s::uuid",
                     (current_user_id, product_id))
         exists = cur.fetchone()
         if exists:
-            cur.execute("DELETE FROM devmarket_bookmarks WHERE user_id=%s AND product_id=%s",
+            cur.execute("DELETE FROM devmarket_bookmarks WHERE user_id=%s::uuid AND product_id=%s::uuid",
                         (current_user_id, product_id))
-            cur.execute("UPDATE devmarket_products SET likes = likes - 1 WHERE id=%s", (product_id,))
+            cur.execute("UPDATE devmarket_products SET likes = GREATEST(0, likes - 1) WHERE id=%s::uuid", (product_id,))
             return jsonify({'bookmarked': False})
         else:
-            cur.execute("INSERT INTO devmarket_bookmarks (user_id, product_id) VALUES (%s, %s)",
+            cur.execute("INSERT INTO devmarket_bookmarks (user_id, product_id) VALUES (%s::uuid, %s::uuid)",
                         (current_user_id, product_id))
-            cur.execute("UPDATE devmarket_products SET likes = likes + 1 WHERE id=%s", (product_id,))
+            cur.execute("UPDATE devmarket_products SET likes = likes + 1 WHERE id=%s::uuid", (product_id,))
             return jsonify({'bookmarked': True})
     finally:
         cur.close()
@@ -1576,6 +1602,20 @@ def ai_search():
         'summary': summary,
         'query': query
     })
+
+
+@app.route('/api/auth/logout', methods=['POST'])
+@token_required
+def logout(current_user_id):
+    """Mark user offline on logout."""
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("UPDATE devmarket_users SET is_online=FALSE WHERE id=%s", (current_user_id,))
+        return jsonify({'message': 'Logged out successfully'})
+    finally:
+        cur.close()
+        conn.close()
 
 
 # ─────────────────────────────────────────────
