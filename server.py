@@ -22,14 +22,14 @@ from functools import wraps
 # CREDENTIALS  (unchanged)
 # ─────────────────────────────────────────────────────────────────────────────
 
-DB_URL             = "postgresql://extravagantmeals_user:V9EijyegMbl2Hcwn0Ajaj61ROYlXnOpH@dpg-d7ktnq8sfn5c73cqeto0-a.frankfurt-postgres.render.com/extravagantmeals"
+DB_URL             = "postgres://avnadmin:AVNS_q_zR9FvhvJHJGbiL0zp@pg-235735e2-ub7499710-7253.j.aivencloud.com:11602/defaultdb?sslmode=require"
 JWT_SECRET         = "devmarket_jwt_secret_key_2024_multibillion"
 
 CLOUDINARY_CLOUD   = "ddusfl7pi"
 CLOUDINARY_KEY     = "599965682593626"
 CLOUDINARY_SECRET  = "pUcb90_1jtv-rDlHXRRsfDcBK5k"
 
-MISTRAL_API_KEY    = "yjvknUyDmAP6SKLQAUtqM5FH65cP69Id"
+MISTRAL_API_KEY    = "uZIGi6VCzkcJ0i5X5mYYc0Nr1XWX21YR"
 MISTRAL_URL        = "https://api.mistral.ai/v1/chat/completions"
 
 TAVILY_API_KEY     = "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"
@@ -128,7 +128,7 @@ def init_db():
     statements = [
 
         # ── users ────────────────────────────────────────────────────────────
-        """CREATE TABLE IF NOT EXISTS dm_users (
+        """CREATE TABLE IF NOT EXISTS devmarket_users (
             id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             username         VARCHAR(50)  UNIQUE NOT NULL,
             email            VARCHAR(255) UNIQUE NOT NULL,
@@ -155,7 +155,7 @@ def init_db():
         )""",
 
         # ── categories ───────────────────────────────────────────────────────
-        """CREATE TABLE IF NOT EXISTS dm_categories (
+        """CREATE TABLE IF NOT EXISTS devmarket_categories (
             id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             name          VARCHAR(100) NOT NULL,
             slug          VARCHAR(100) UNIQUE NOT NULL,
@@ -167,10 +167,10 @@ def init_db():
         )""",
 
         # ── products ─────────────────────────────────────────────────────────
-        """CREATE TABLE IF NOT EXISTS dm_products (
+        """CREATE TABLE IF NOT EXISTS devmarket_products (
             id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            seller_id          UUID REFERENCES dm_users(id) ON DELETE CASCADE,
-            category_id        UUID REFERENCES dm_categories(id),
+            seller_id          UUID REFERENCES devmarket_users(id) ON DELETE CASCADE,
+            category_id        UUID REFERENCES devmarket_categories(id),
             title              VARCHAR(255) NOT NULL,
             slug               VARCHAR(255) UNIQUE NOT NULL,
             short_description  TEXT,
@@ -201,11 +201,11 @@ def init_db():
         )""",
 
         # ── orders ───────────────────────────────────────────────────────────
-        """CREATE TABLE IF NOT EXISTS dm_orders (
+        """CREATE TABLE IF NOT EXISTS devmarket_orders (
             id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            buyer_id          UUID REFERENCES dm_users(id),
-            seller_id         UUID REFERENCES dm_users(id),
-            product_id        UUID REFERENCES dm_products(id),
+            buyer_id          UUID REFERENCES devmarket_users(id),
+            seller_id         UUID REFERENCES devmarket_users(id),
+            product_id        UUID REFERENCES devmarket_products(id),
             status            VARCHAR(30)   DEFAULT 'pending_contact',
             negotiated_price  DECIMAL(10,2),
             notes             TEXT,
@@ -216,12 +216,12 @@ def init_db():
         )""",
 
         # ── conversations ────────────────────────────────────────────────────
-        """CREATE TABLE IF NOT EXISTS dm_conversations (
+        """CREATE TABLE IF NOT EXISTS devmarket_conversations (
             id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            participant_one    UUID REFERENCES dm_users(id),
-            participant_two    UUID REFERENCES dm_users(id),
-            product_id         UUID REFERENCES dm_products(id),
-            order_id           UUID REFERENCES dm_orders(id),
+            participant_one    UUID REFERENCES devmarket_users(id),
+            participant_two    UUID REFERENCES devmarket_users(id),
+            product_id         UUID REFERENCES devmarket_products(id),
+            order_id           UUID REFERENCES devmarket_orders(id),
             last_message       TEXT,
             last_message_at    TIMESTAMP DEFAULT NOW(),
             unread_count_one   INTEGER DEFAULT 0,
@@ -230,10 +230,10 @@ def init_db():
         )""",
 
         # ── messages ─────────────────────────────────────────────────────────
-        """CREATE TABLE IF NOT EXISTS dm_messages (
+        """CREATE TABLE IF NOT EXISTS devmarket_messages (
             id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            conversation_id  UUID REFERENCES dm_conversations(id) ON DELETE CASCADE,
-            sender_id        UUID REFERENCES dm_users(id),
+            conversation_id  UUID REFERENCES devmarket_conversations(id) ON DELETE CASCADE,
+            sender_id        UUID REFERENCES devmarket_users(id),
             content          TEXT NOT NULL,
             message_type     VARCHAR(20) DEFAULT 'text',
             attachment_url   TEXT,
@@ -243,10 +243,10 @@ def init_db():
         )""",
 
         # ── reviews ──────────────────────────────────────────────────────────
-        """CREATE TABLE IF NOT EXISTS dm_reviews (
+        """CREATE TABLE IF NOT EXISTS devmarket_reviews (
             id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            product_id   UUID REFERENCES dm_products(id) ON DELETE CASCADE,
-            reviewer_id  UUID REFERENCES dm_users(id),
+            product_id   UUID REFERENCES devmarket_products(id) ON DELETE CASCADE,
+            reviewer_id  UUID REFERENCES devmarket_users(id),
             rating       INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
             title        VARCHAR(255),
             content      TEXT NOT NULL,
@@ -256,18 +256,18 @@ def init_db():
         )""",
 
         # ── bookmarks ────────────────────────────────────────────────────────
-        """CREATE TABLE IF NOT EXISTS dm_bookmarks (
+        """CREATE TABLE IF NOT EXISTS devmarket_bookmarks (
             id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            user_id     UUID REFERENCES dm_users(id) ON DELETE CASCADE,
-            product_id  UUID REFERENCES dm_products(id) ON DELETE CASCADE,
+            user_id     UUID REFERENCES devmarket_users(id) ON DELETE CASCADE,
+            product_id  UUID REFERENCES devmarket_products(id) ON DELETE CASCADE,
             created_at  TIMESTAMP DEFAULT NOW(),
             UNIQUE(user_id, product_id)
         )""",
 
         # ── notifications ────────────────────────────────────────────────────
-        """CREATE TABLE IF NOT EXISTS dm_notifications (
+        """CREATE TABLE IF NOT EXISTS devmarket_notifications (
             id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            user_id    UUID REFERENCES dm_users(id) ON DELETE CASCADE,
+            user_id    UUID REFERENCES devmarket_users(id) ON DELETE CASCADE,
             type       VARCHAR(50)  NOT NULL,
             title      VARCHAR(255) NOT NULL,
             body       TEXT,
@@ -277,9 +277,9 @@ def init_db():
         )""",
 
         # ── portfolio ────────────────────────────────────────────────────────
-        """CREATE TABLE IF NOT EXISTS dm_portfolio (
+        """CREATE TABLE IF NOT EXISTS devmarket_portfolio (
             id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            user_id     UUID REFERENCES dm_users(id) ON DELETE CASCADE,
+            user_id     UUID REFERENCES devmarket_users(id) ON DELETE CASCADE,
             title       VARCHAR(255) NOT NULL,
             description TEXT,
             image_url   TEXT,
@@ -289,9 +289,9 @@ def init_db():
         )""",
 
         # ── articles ─────────────────────────────────────────────────────────
-        """CREATE TABLE IF NOT EXISTS dm_articles (
+        """CREATE TABLE IF NOT EXISTS devmarket_articles (
             id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            author_id    UUID REFERENCES dm_users(id) ON DELETE CASCADE,
+            author_id    UUID REFERENCES devmarket_users(id) ON DELETE CASCADE,
             title        VARCHAR(500) NOT NULL,
             slug         VARCHAR(500) UNIQUE NOT NULL,
             content      TEXT NOT NULL,
@@ -305,9 +305,9 @@ def init_db():
         )""",
 
         # ── jobs ─────────────────────────────────────────────────────────────
-        """CREATE TABLE IF NOT EXISTS dm_jobs (
+        """CREATE TABLE IF NOT EXISTS devmarket_jobs (
             id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            poster_id          UUID REFERENCES dm_users(id) ON DELETE CASCADE,
+            poster_id          UUID REFERENCES devmarket_users(id) ON DELETE CASCADE,
             title              VARCHAR(255) NOT NULL,
             company            VARCHAR(100),
             description        TEXT NOT NULL,
@@ -322,9 +322,9 @@ def init_db():
         )""",
 
         # ── ai chat sessions ─────────────────────────────────────────────────
-        """CREATE TABLE IF NOT EXISTS dm_ai_chats (
+        """CREATE TABLE IF NOT EXISTS devmarket_ai_chats (
             id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            user_id    UUID REFERENCES dm_users(id) ON DELETE CASCADE,
+            user_id    UUID REFERENCES devmarket_users(id) ON DELETE CASCADE,
             session_id VARCHAR(100) NOT NULL,
             messages   JSONB DEFAULT '[]',
             created_at TIMESTAMP DEFAULT NOW(),
@@ -332,7 +332,7 @@ def init_db():
         )""",
 
         # ── seed categories ──────────────────────────────────────────────────
-        """INSERT INTO dm_categories (name, slug, description, icon, color) VALUES
+        """INSERT INTO devmarket_categories (name, slug, description, icon, color) VALUES
             ('APIs & Integrations', 'apis',         'REST, GraphQL, WebSocket APIs and third-party integrations', '🔌', '#6366f1'),
             ('UI Templates',        'ui-templates', 'React, Vue, Angular templates and component libraries',      '🎨', '#ec4899'),
             ('Developer Tools',     'dev-tools',    'CLI tools, extensions, productivity boosters',               '🔧', '#f59e0b'),
@@ -467,7 +467,7 @@ def register():
     cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
         cur.execute(
-            """INSERT INTO dm_users (username, email, password_hash, full_name, role)
+            """INSERT INTO devmarket_users (username, email, password_hash, full_name, role)
                VALUES (%s, %s, %s, %s, 'seller')
                RETURNING id, username, email, full_name, role,
                          avatar_url, badge, reputation_score, is_verified""",
@@ -499,7 +499,7 @@ def login():
     cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
         cur.execute(
-            "SELECT * FROM dm_users WHERE email=%s OR username=%s",
+            "SELECT * FROM devmarket_users WHERE email=%s OR username=%s",
             (identifier, identifier),
         )
         user = cur.fetchone()
@@ -509,7 +509,7 @@ def login():
 
         # update last_active and online flag
         cur.execute(
-            "UPDATE dm_users SET last_active=NOW(), is_online=TRUE WHERE id=%s",
+            "UPDATE devmarket_users SET last_active=NOW(), is_online=TRUE WHERE id=%s",
             (user["id"],),
         )
 
@@ -544,7 +544,7 @@ def get_me(uid):
                       github_url, website_url, twitter_url, linkedin_url, skills,
                       role, is_verified, reputation_score, total_sales, total_purchases,
                       joined_at, last_active, location, badge
-               FROM dm_users WHERE id=%s::uuid""",
+               FROM devmarket_users WHERE id=%s::uuid""",
             (uid,),
         )
         user = cur.fetchone()
@@ -568,14 +568,14 @@ def update_profile(uid):
 
     set_clause = ", ".join(f"{k}=%s" for k in updates)
     vals       = list(updates.values()) + [uid]
-    db_execute(f"UPDATE dm_users SET {set_clause} WHERE id=%s::uuid", vals)
+    db_execute(f"UPDATE devmarket_users SET {set_clause} WHERE id=%s::uuid", vals)
     return jsonify({"message": "Profile updated"})
 
 
 @app.route("/api/auth/logout", methods=["POST"])
 @token_required
 def logout(uid):
-    db_execute("UPDATE dm_users SET is_online=FALSE WHERE id=%s::uuid", (uid,))
+    db_execute("UPDATE devmarket_users SET is_online=FALSE WHERE id=%s::uuid", (uid,))
     return jsonify({"message": "Logged out"})
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -613,7 +613,7 @@ def upload_avatar(uid):
             ],
         )
         db_execute(
-            "UPDATE dm_users SET avatar_url=%s WHERE id=%s::uuid",
+            "UPDATE devmarket_users SET avatar_url=%s WHERE id=%s::uuid",
             (result["secure_url"], uid),
         )
         return jsonify({"url": result["secure_url"]})
@@ -626,7 +626,7 @@ def upload_avatar(uid):
 
 @app.route("/api/categories")
 def get_categories():
-    rows = db_execute("SELECT * FROM dm_categories ORDER BY name", fetch="all")
+    rows = db_execute("SELECT * FROM devmarket_categories ORDER BY name", fetch="all")
     return jsonify({"categories": safe_list(rows or [])})
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -688,9 +688,9 @@ def get_products(uid):
                        u.avatar_url AS seller_avatar,
                        u.is_verified AS seller_verified,
                        u.badge AS seller_badge
-                FROM dm_products p
-                LEFT JOIN dm_categories c ON p.category_id = c.id
-                LEFT JOIN dm_users      u ON p.seller_id   = u.id
+                FROM devmarket_products p
+                LEFT JOIN devmarket_categories c ON p.category_id = c.id
+                LEFT JOIN devmarket_users      u ON p.seller_id   = u.id
                 WHERE {where_sql}
                 ORDER BY {order_by}
                 LIMIT %s OFFSET %s""",
@@ -700,8 +700,8 @@ def get_products(uid):
 
         cur.execute(
             f"""SELECT COUNT(*) AS n
-                FROM dm_products p
-                LEFT JOIN dm_categories c ON p.category_id = c.id
+                FROM devmarket_products p
+                LEFT JOIN devmarket_categories c ON p.category_id = c.id
                 WHERE {where_sql}""",
             params,
         )
@@ -734,9 +734,9 @@ def get_product(uid, pid):
                       u.badge AS seller_badge,
                       u.reputation_score AS seller_reputation,
                       u.total_sales AS seller_total_sales
-               FROM dm_products p
-               LEFT JOIN dm_categories c ON p.category_id = c.id
-               LEFT JOIN dm_users      u ON p.seller_id   = u.id
+               FROM devmarket_products p
+               LEFT JOIN devmarket_categories c ON p.category_id = c.id
+               LEFT JOIN devmarket_users      u ON p.seller_id   = u.id
                WHERE p.slug=%s OR p.id::text=%s""",
             (pid, pid),
         )
@@ -748,15 +748,15 @@ def get_product(uid, pid):
 
         # increment views
         cur.execute(
-            "UPDATE dm_products SET views=views+1 WHERE id=%s::uuid",
+            "UPDATE devmarket_products SET views=views+1 WHERE id=%s::uuid",
             (product["id"],),
         )
 
         # reviews
         cur.execute(
             """SELECT r.*, u.username, u.full_name, u.avatar_url
-               FROM dm_reviews r
-               JOIN dm_users u ON r.reviewer_id = u.id
+               FROM devmarket_reviews r
+               JOIN devmarket_users u ON r.reviewer_id = u.id
                WHERE r.product_id=%s::uuid
                ORDER BY r.created_at DESC LIMIT 20""",
             (product["id"],),
@@ -767,7 +767,7 @@ def get_product(uid, pid):
         is_bookmarked = False
         if uid:
             cur.execute(
-                "SELECT 1 FROM dm_bookmarks WHERE user_id=%s::uuid AND product_id=%s::uuid",
+                "SELECT 1 FROM devmarket_bookmarks WHERE user_id=%s::uuid AND product_id=%s::uuid",
                 (uid, product["id"]),
             )
             is_bookmarked = cur.fetchone() is not None
@@ -776,8 +776,8 @@ def get_product(uid, pid):
         cur.execute(
             """SELECT p.id, p.title, p.slug, p.price, p.images, p.rating_avg,
                       p.downloads, p.product_type, u.username, u.avatar_url
-               FROM dm_products p
-               JOIN dm_users u ON p.seller_id = u.id
+               FROM devmarket_products p
+               JOIN devmarket_users u ON p.seller_id = u.id
                WHERE p.category_id=%s::uuid AND p.id!=%s::uuid AND p.is_active=TRUE
                ORDER BY p.rating_avg DESC LIMIT 4""",
             (product["category_id"], product["id"]),
@@ -812,13 +812,13 @@ def create_product(uid):
         # unique slug
         n = 1
         while True:
-            cur.execute("SELECT 1 FROM dm_products WHERE slug=%s", (slug,))
+            cur.execute("SELECT 1 FROM devmarket_products WHERE slug=%s", (slug,))
             if not cur.fetchone():
                 break
             slug = f"{slug_base}-{n}"; n += 1
 
         cur.execute(
-            """INSERT INTO dm_products
+            """INSERT INTO devmarket_products
                (seller_id, category_id, title, slug, short_description, description,
                 price, product_type, tags, tech_stack, images, demo_url, repo_url,
                 documentation_url, live_preview_url, version, license, file_size)
@@ -839,7 +839,7 @@ def create_product(uid):
 
         # update category count
         cur.execute(
-            "UPDATE dm_categories SET product_count=product_count+1 WHERE id=%s::uuid",
+            "UPDATE devmarket_categories SET product_count=product_count+1 WHERE id=%s::uuid",
             (d["category_id"],),
         )
         return jsonify({"product": product}), 201
@@ -855,7 +855,7 @@ def update_product(uid, pid):
     conn = get_db()
     cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
-        cur.execute("SELECT seller_id FROM dm_products WHERE id=%s::uuid", (pid,))
+        cur.execute("SELECT seller_id FROM devmarket_products WHERE id=%s::uuid", (pid,))
         row = cur.fetchone()
         if not row:
             return jsonify({"error": "Product not found"}), 404
@@ -871,7 +871,7 @@ def update_product(uid, pid):
         updates["updated_at"] = datetime.datetime.utcnow().isoformat()
         set_clause = ", ".join(f"{k}=%s" for k in updates)
         cur.execute(
-            f"UPDATE dm_products SET {set_clause} WHERE id=%s::uuid",
+            f"UPDATE devmarket_products SET {set_clause} WHERE id=%s::uuid",
             list(updates.values()) + [pid],
         )
         return jsonify({"message": "Product updated"})
@@ -886,11 +886,11 @@ def delete_product(uid, pid):
     conn = get_db()
     cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
-        cur.execute("SELECT seller_id FROM dm_products WHERE id=%s::uuid", (pid,))
+        cur.execute("SELECT seller_id FROM devmarket_products WHERE id=%s::uuid", (pid,))
         row = cur.fetchone()
         if not row or str(row["seller_id"]) != uid:
             return jsonify({"error": "Not authorised"}), 403
-        cur.execute("DELETE FROM dm_products WHERE id=%s::uuid", (pid,))
+        cur.execute("DELETE FROM devmarket_products WHERE id=%s::uuid", (pid,))
         return jsonify({"message": "Product deleted"})
     finally:
         cur.close()
@@ -911,9 +911,9 @@ def get_trending():
                       p.views, p.product_type, p.tags,
                       u.username, u.avatar_url, u.is_verified,
                       c.name AS category_name, c.icon AS category_icon
-               FROM dm_products p
-               JOIN dm_users      u ON p.seller_id   = u.id
-               LEFT JOIN dm_categories c ON p.category_id = c.id
+               FROM devmarket_products p
+               JOIN devmarket_users      u ON p.seller_id   = u.id
+               LEFT JOIN devmarket_categories c ON p.category_id = c.id
                WHERE p.is_active=TRUE
                ORDER BY (p.views + p.downloads*3 + p.likes*5) DESC
                LIMIT 12"""
@@ -937,9 +937,9 @@ def get_featured():
                       u.username, u.full_name, u.avatar_url, u.is_verified,
                       c.name AS category_name, c.icon AS category_icon,
                       c.color AS category_color
-               FROM dm_products p
-               JOIN dm_users      u ON p.seller_id   = u.id
-               LEFT JOIN dm_categories c ON p.category_id = c.id
+               FROM devmarket_products p
+               JOIN devmarket_users      u ON p.seller_id   = u.id
+               LEFT JOIN devmarket_categories c ON p.category_id = c.id
                WHERE p.is_active=TRUE
                ORDER BY p.is_featured DESC, p.rating_avg DESC, p.downloads DESC
                LIMIT 6"""
@@ -959,7 +959,7 @@ def search_suggestions():
     if len(q) < 2:
         return jsonify({"suggestions": []})
     rows = db_execute(
-        "SELECT title, slug, price, product_type FROM dm_products "
+        "SELECT title, slug, price, product_type FROM devmarket_products "
         "WHERE title ILIKE %s AND is_active=TRUE LIMIT 8",
         (f"%{q}%",),
         fetch="all",
@@ -974,10 +974,10 @@ def search_suggestions():
 def platform_stats():
     stats = {"users": 0, "products": 0, "orders": 0, "downloads": 0}
     queries = [
-        ("users",     "SELECT COUNT(*)        AS n FROM dm_users"),
-        ("products",  "SELECT COUNT(*)        AS n FROM dm_products WHERE is_active=TRUE"),
-        ("orders",    "SELECT COUNT(*)        AS n FROM dm_orders"),
-        ("downloads", "SELECT COALESCE(SUM(downloads),0) AS n FROM dm_products"),
+        ("users",     "SELECT COUNT(*)        AS n FROM devmarket_users"),
+        ("products",  "SELECT COUNT(*)        AS n FROM devmarket_products WHERE is_active=TRUE"),
+        ("orders",    "SELECT COUNT(*)        AS n FROM devmarket_orders"),
+        ("downloads", "SELECT COALESCE(SUM(downloads),0) AS n FROM devmarket_products"),
     ]
     for key, sql in queries:
         try:
@@ -998,25 +998,25 @@ def toggle_bookmark(uid, pid):
     cur  = conn.cursor()
     try:
         cur.execute(
-            "SELECT 1 FROM dm_bookmarks WHERE user_id=%s::uuid AND product_id=%s::uuid",
+            "SELECT 1 FROM devmarket_bookmarks WHERE user_id=%s::uuid AND product_id=%s::uuid",
             (uid, pid),
         )
         if cur.fetchone():
             cur.execute(
-                "DELETE FROM dm_bookmarks WHERE user_id=%s::uuid AND product_id=%s::uuid",
+                "DELETE FROM devmarket_bookmarks WHERE user_id=%s::uuid AND product_id=%s::uuid",
                 (uid, pid),
             )
             cur.execute(
-                "UPDATE dm_products SET likes=GREATEST(0,likes-1) WHERE id=%s::uuid", (pid,)
+                "UPDATE devmarket_products SET likes=GREATEST(0,likes-1) WHERE id=%s::uuid", (pid,)
             )
             return jsonify({"bookmarked": False})
         else:
             cur.execute(
-                "INSERT INTO dm_bookmarks (user_id, product_id) VALUES (%s::uuid,%s::uuid)",
+                "INSERT INTO devmarket_bookmarks (user_id, product_id) VALUES (%s::uuid,%s::uuid)",
                 (uid, pid),
             )
             cur.execute(
-                "UPDATE dm_products SET likes=likes+1 WHERE id=%s::uuid", (pid,)
+                "UPDATE devmarket_products SET likes=likes+1 WHERE id=%s::uuid", (pid,)
             )
             return jsonify({"bookmarked": True})
     finally:
@@ -1034,9 +1034,9 @@ def get_bookmarks(uid):
             """SELECT p.id, p.title, p.slug, p.price, p.images, p.rating_avg,
                       p.downloads, p.product_type, p.short_description,
                       u.username, u.avatar_url
-               FROM dm_bookmarks b
-               JOIN dm_products p ON b.product_id = p.id
-               JOIN dm_users    u ON p.seller_id   = u.id
+               FROM devmarket_bookmarks b
+               JOIN devmarket_products p ON b.product_id = p.id
+               JOIN devmarket_users    u ON p.seller_id   = u.id
                WHERE b.user_id=%s::uuid
                ORDER BY b.created_at DESC""",
             (uid,),
@@ -1067,7 +1067,7 @@ def add_review(uid, pid):
     cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
         cur.execute(
-            """INSERT INTO dm_reviews (product_id, reviewer_id, rating, title, content)
+            """INSERT INTO devmarket_reviews (product_id, reviewer_id, rating, title, content)
                VALUES (%s::uuid,%s::uuid,%s,%s,%s) RETURNING *""",
             (pid, uid, int(rating), title, content),
         )
@@ -1075,9 +1075,9 @@ def add_review(uid, pid):
 
         # recalculate product rating
         cur.execute(
-            """UPDATE dm_products
-               SET rating_avg  = (SELECT AVG(rating)   FROM dm_reviews WHERE product_id=%s::uuid),
-                   review_count= (SELECT COUNT(*)       FROM dm_reviews WHERE product_id=%s::uuid)
+            """UPDATE devmarket_products
+               SET rating_avg  = (SELECT AVG(rating)   FROM devmarket_reviews WHERE product_id=%s::uuid),
+                   review_count= (SELECT COUNT(*)       FROM devmarket_reviews WHERE product_id=%s::uuid)
                WHERE id=%s::uuid""",
             (pid, pid, pid),
         )
@@ -1103,7 +1103,7 @@ def create_order(uid):
     cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
         cur.execute(
-            "SELECT seller_id, price, title FROM dm_products WHERE id=%s::uuid",
+            "SELECT seller_id, price, title FROM devmarket_products WHERE id=%s::uuid",
             (product_id,),
         )
         product = cur.fetchone()
@@ -1113,7 +1113,7 @@ def create_order(uid):
             return jsonify({"error": "Cannot purchase your own product"}), 400
 
         cur.execute(
-            """INSERT INTO dm_orders (buyer_id, seller_id, product_id, notes)
+            """INSERT INTO devmarket_orders (buyer_id, seller_id, product_id, notes)
                VALUES (%s::uuid,%s::uuid,%s::uuid,%s) RETURNING *""",
             (uid, product["seller_id"], product_id, notes),
         )
@@ -1122,7 +1122,7 @@ def create_order(uid):
 
         # auto-create conversation
         cur.execute(
-            """INSERT INTO dm_conversations
+            """INSERT INTO devmarket_conversations
                (participant_one, participant_two, product_id, order_id)
                VALUES (%s::uuid,%s::uuid,%s::uuid,%s::uuid)
                ON CONFLICT DO NOTHING RETURNING id""",
@@ -1131,7 +1131,7 @@ def create_order(uid):
         conv = cur.fetchone()
         if conv:
             cur.execute(
-                """INSERT INTO dm_messages (conversation_id, sender_id, content, message_type)
+                """INSERT INTO devmarket_messages (conversation_id, sender_id, content, message_type)
                    VALUES (%s::uuid,%s::uuid,%s,'system')""",
                 (
                     str(conv["id"]), uid,
@@ -1156,9 +1156,9 @@ def get_orders(uid):
                 """SELECT o.*, p.title AS product_title, p.slug AS product_slug,
                           p.images AS product_images,
                           u.username AS seller_username, u.avatar_url AS seller_avatar
-                   FROM dm_orders o
-                   JOIN dm_products p ON o.product_id = p.id
-                   JOIN dm_users    u ON o.seller_id  = u.id
+                   FROM devmarket_orders o
+                   JOIN devmarket_products p ON o.product_id = p.id
+                   JOIN devmarket_users    u ON o.seller_id  = u.id
                    WHERE o.buyer_id=%s::uuid ORDER BY o.created_at DESC""",
                 (uid,),
             )
@@ -1166,9 +1166,9 @@ def get_orders(uid):
             cur.execute(
                 """SELECT o.*, p.title AS product_title, p.slug AS product_slug,
                           u.username AS buyer_username, u.avatar_url AS buyer_avatar
-                   FROM dm_orders o
-                   JOIN dm_products p ON o.product_id = p.id
-                   JOIN dm_users    u ON o.buyer_id   = u.id
+                   FROM devmarket_orders o
+                   JOIN devmarket_products p ON o.product_id = p.id
+                   JOIN devmarket_users    u ON o.buyer_id   = u.id
                    WHERE o.seller_id=%s::uuid ORDER BY o.created_at DESC""",
                 (uid,),
             )
@@ -1192,10 +1192,10 @@ def get_conversations(uid):
                       p.title AS product_title, p.slug AS product_slug,
                       u1.username AS p1_username, u1.full_name AS p1_name, u1.avatar_url AS p1_avatar,
                       u2.username AS p2_username, u2.full_name AS p2_name, u2.avatar_url AS p2_avatar
-               FROM dm_conversations c
-               LEFT JOIN dm_products p ON c.product_id    = p.id
-               JOIN      dm_users   u1 ON c.participant_one = u1.id
-               JOIN      dm_users   u2 ON c.participant_two = u2.id
+               FROM devmarket_conversations c
+               LEFT JOIN devmarket_products p ON c.product_id    = p.id
+               JOIN      devmarket_users   u1 ON c.participant_one = u1.id
+               JOIN      devmarket_users   u2 ON c.participant_two = u2.id
                WHERE c.participant_one=%s::uuid OR c.participant_two=%s::uuid
                ORDER BY c.last_message_at DESC""",
             (uid, uid),
@@ -1213,7 +1213,7 @@ def get_messages(uid, cid):
     cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
         cur.execute(
-            """SELECT * FROM dm_conversations
+            """SELECT * FROM devmarket_conversations
                WHERE id=%s::uuid AND (participant_one=%s::uuid OR participant_two=%s::uuid)""",
             (cid, uid, uid),
         )
@@ -1222,8 +1222,8 @@ def get_messages(uid, cid):
 
         cur.execute(
             """SELECT m.*, u.username, u.full_name, u.avatar_url
-               FROM dm_messages m
-               JOIN dm_users u ON m.sender_id = u.id
+               FROM devmarket_messages m
+               JOIN devmarket_users u ON m.sender_id = u.id
                WHERE m.conversation_id=%s::uuid AND m.is_deleted=FALSE
                ORDER BY m.created_at ASC""",
             (cid,),
@@ -1232,7 +1232,7 @@ def get_messages(uid, cid):
 
         # mark as read
         cur.execute(
-            """UPDATE dm_messages SET is_read=TRUE
+            """UPDATE devmarket_messages SET is_read=TRUE
                WHERE conversation_id=%s::uuid AND sender_id!=%s::uuid""",
             (cid, uid),
         )
@@ -1254,7 +1254,7 @@ def send_message(uid, cid):
     cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
         cur.execute(
-            """SELECT * FROM dm_conversations
+            """SELECT * FROM devmarket_conversations
                WHERE id=%s::uuid AND (participant_one=%s::uuid OR participant_two=%s::uuid)""",
             (cid, uid, uid),
         )
@@ -1262,14 +1262,14 @@ def send_message(uid, cid):
             return jsonify({"error": "Conversation not found"}), 404
 
         cur.execute(
-            """INSERT INTO dm_messages (conversation_id, sender_id, content)
+            """INSERT INTO devmarket_messages (conversation_id, sender_id, content)
                VALUES (%s::uuid,%s::uuid,%s) RETURNING *""",
             (cid, uid, content),
         )
         msg = safe_dict(cur.fetchone())
 
         cur.execute(
-            "UPDATE dm_conversations SET last_message=%s, last_message_at=NOW() WHERE id=%s::uuid",
+            "UPDATE devmarket_conversations SET last_message=%s, last_message_at=NOW() WHERE id=%s::uuid",
             (content[:100], cid),
         )
         return jsonify({"message": msg}), 201
@@ -1294,7 +1294,7 @@ def start_conversation(uid):
     try:
         # resolve recipient
         cur.execute(
-            "SELECT id FROM dm_users WHERE username=%s OR id::text=%s",
+            "SELECT id FROM devmarket_users WHERE username=%s OR id::text=%s",
             (other_user, other_user),
         )
         recipient = cur.fetchone()
@@ -1304,7 +1304,7 @@ def start_conversation(uid):
 
         # find existing conv between these two
         cur.execute(
-            """SELECT id FROM dm_conversations
+            """SELECT id FROM devmarket_conversations
                WHERE (participant_one=%s::uuid AND participant_two=%s::uuid)
                   OR (participant_one=%s::uuid AND participant_two=%s::uuid)
                LIMIT 1""",
@@ -1317,7 +1317,7 @@ def start_conversation(uid):
         else:
             prod_uuid = product_id if product_id else None
             cur.execute(
-                """INSERT INTO dm_conversations
+                """INSERT INTO devmarket_conversations
                    (participant_one, participant_two, product_id)
                    VALUES (%s::uuid,%s::uuid,%s)
                    RETURNING id""",
@@ -1327,12 +1327,12 @@ def start_conversation(uid):
 
         # insert first message
         cur.execute(
-            """INSERT INTO dm_messages (conversation_id, sender_id, content)
+            """INSERT INTO devmarket_messages (conversation_id, sender_id, content)
                VALUES (%s::uuid,%s::uuid,%s)""",
             (conv_id, uid, first_msg),
         )
         cur.execute(
-            "UPDATE dm_conversations SET last_message=%s, last_message_at=NOW() WHERE id=%s::uuid",
+            "UPDATE devmarket_conversations SET last_message=%s, last_message_at=NOW() WHERE id=%s::uuid",
             (first_msg[:100], conv_id),
         )
         return jsonify({"conversation_id": conv_id}), 201
@@ -1351,7 +1351,7 @@ def get_notifications(uid):
     cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
         cur.execute(
-            "SELECT * FROM dm_notifications WHERE user_id=%s::uuid ORDER BY created_at DESC LIMIT 30",
+            "SELECT * FROM devmarket_notifications WHERE user_id=%s::uuid ORDER BY created_at DESC LIMIT 30",
             (uid,),
         )
         notifs = safe_list(cur.fetchall())
@@ -1365,7 +1365,7 @@ def get_notifications(uid):
 @app.route("/api/notifications/read-all", methods=["POST"])
 @token_required
 def mark_all_read(uid):
-    db_execute("UPDATE dm_notifications SET is_read=TRUE WHERE user_id=%s::uuid", (uid,))
+    db_execute("UPDATE devmarket_notifications SET is_read=TRUE WHERE user_id=%s::uuid", (uid,))
     return jsonify({"message": "All marked as read"})
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1382,7 +1382,7 @@ def get_user_profile(username):
                       github_url, website_url, twitter_url, linkedin_url, skills,
                       role, is_verified, reputation_score, total_sales,
                       total_purchases, joined_at, location, badge
-               FROM dm_users WHERE username=%s""",
+               FROM devmarket_users WHERE username=%s""",
             (username,),
         )
         user = cur.fetchone()
@@ -1392,7 +1392,7 @@ def get_user_profile(username):
 
         cur.execute(
             """SELECT id, title, slug, price, images, rating_avg, downloads, product_type
-               FROM dm_products
+               FROM devmarket_products
                WHERE seller_id=%s::uuid AND is_active=TRUE
                ORDER BY created_at DESC""",
             (user["id"],),
@@ -1400,7 +1400,7 @@ def get_user_profile(username):
         products = safe_list(cur.fetchall())
 
         cur.execute(
-            "SELECT * FROM dm_portfolio WHERE user_id=%s::uuid ORDER BY created_at DESC",
+            "SELECT * FROM devmarket_portfolio WHERE user_id=%s::uuid ORDER BY created_at DESC",
             (user["id"],),
         )
         portfolio = safe_list(cur.fetchall())
@@ -1428,19 +1428,19 @@ def dashboard_stats(uid):
             val = list(row.values())[0]
             return int(val) if val is not None else 0
 
-        total_products   = scalar("SELECT COUNT(*)        FROM dm_products WHERE seller_id=%s::uuid", (uid,))
-        total_views      = scalar("SELECT COALESCE(SUM(views),0)     FROM dm_products WHERE seller_id=%s::uuid", (uid,))
-        total_downloads  = scalar("SELECT COALESCE(SUM(downloads),0) FROM dm_products WHERE seller_id=%s::uuid", (uid,))
-        purchases        = scalar("SELECT COUNT(*) FROM dm_orders WHERE buyer_id=%s::uuid",  (uid,))
-        sales            = scalar("SELECT COUNT(*) FROM dm_orders WHERE seller_id=%s::uuid", (uid,))
+        total_products   = scalar("SELECT COUNT(*)        FROM devmarket_products WHERE seller_id=%s::uuid", (uid,))
+        total_views      = scalar("SELECT COALESCE(SUM(views),0)     FROM devmarket_products WHERE seller_id=%s::uuid", (uid,))
+        total_downloads  = scalar("SELECT COALESCE(SUM(downloads),0) FROM devmarket_products WHERE seller_id=%s::uuid", (uid,))
+        purchases        = scalar("SELECT COUNT(*) FROM devmarket_orders WHERE buyer_id=%s::uuid",  (uid,))
+        sales            = scalar("SELECT COUNT(*) FROM devmarket_orders WHERE seller_id=%s::uuid", (uid,))
         conversations    = scalar(
-            "SELECT COUNT(*) FROM dm_conversations WHERE participant_one=%s::uuid OR participant_two=%s::uuid",
+            "SELECT COUNT(*) FROM devmarket_conversations WHERE participant_one=%s::uuid OR participant_two=%s::uuid",
             (uid, uid),
         )
 
         cur.execute(
             """SELECT title, views, downloads, rating_avg, slug, images
-               FROM dm_products WHERE seller_id=%s::uuid
+               FROM devmarket_products WHERE seller_id=%s::uuid
                ORDER BY views DESC LIMIT 5""",
             (uid,),
         )
@@ -1469,7 +1469,7 @@ def get_portfolio():
     if not user_id:
         return jsonify({"error": "user_id required"}), 400
     rows = db_execute(
-        "SELECT * FROM dm_portfolio WHERE user_id=%s::uuid ORDER BY created_at DESC",
+        "SELECT * FROM devmarket_portfolio WHERE user_id=%s::uuid ORDER BY created_at DESC",
         (user_id,), fetch="all",
     )
     return jsonify({"portfolio": safe_list(rows or [])})
@@ -1480,7 +1480,7 @@ def get_portfolio():
 def add_portfolio(uid):
     d   = request.get_json() or {}
     row = db_execute(
-        """INSERT INTO dm_portfolio (user_id, title, description, image_url, project_url, tech_stack)
+        """INSERT INTO devmarket_portfolio (user_id, title, description, image_url, project_url, tech_stack)
            VALUES (%s::uuid,%s,%s,%s,%s,%s) RETURNING *""",
         (uid, d.get("title"), d.get("description"),
          d.get("image_url"), d.get("project_url"), d.get("tech_stack", [])),
@@ -1502,8 +1502,8 @@ def get_articles():
     try:
         cur.execute(
             """SELECT a.*, u.username, u.full_name, u.avatar_url
-               FROM dm_articles a
-               JOIN dm_users u ON a.author_id = u.id
+               FROM devmarket_articles a
+               JOIN devmarket_users u ON a.author_id = u.id
                WHERE a.is_published=TRUE
                ORDER BY a.created_at DESC LIMIT %s OFFSET %s""",
             (per_page, offset),
@@ -1522,7 +1522,7 @@ def create_article(uid):
         return jsonify({"error": "Title and content required"}), 400
     slug = slugify(d["title"]) + "-" + str(uuid.uuid4())[:8]
     row = db_execute(
-        """INSERT INTO dm_articles (author_id, title, slug, content, cover_image, tags)
+        """INSERT INTO devmarket_articles (author_id, title, slug, content, cover_image, tags)
            VALUES (%s::uuid,%s,%s,%s,%s,%s) RETURNING *""",
         (uid, d["title"], slug, d["content"], d.get("cover_image"), d.get("tags", [])),
         fetch="one",
@@ -1543,8 +1543,8 @@ def get_jobs():
     try:
         cur.execute(
             """SELECT j.*, u.username, u.full_name, u.avatar_url
-               FROM dm_jobs j
-               JOIN dm_users u ON j.poster_id = u.id
+               FROM devmarket_jobs j
+               JOIN devmarket_users u ON j.poster_id = u.id
                WHERE j.is_active=TRUE
                ORDER BY j.created_at DESC LIMIT %s OFFSET %s""",
             (per_page, offset),
@@ -1562,7 +1562,7 @@ def post_job(uid):
     if not d.get("title") or not d.get("description"):
         return jsonify({"error": "Title and description required"}), 400
     row = db_execute(
-        """INSERT INTO dm_jobs
+        """INSERT INTO devmarket_jobs
            (poster_id, title, company, description, job_type, location, salary_range, tech_stack, is_remote)
            VALUES (%s::uuid,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *""",
         (uid, d["title"], d.get("company"), d["description"],
@@ -1580,7 +1580,7 @@ def post_job(uid):
 @token_required
 def request_verification(uid):
     db_execute(
-        """INSERT INTO dm_notifications (user_id, type, title, body)
+        """INSERT INTO devmarket_notifications (user_id, type, title, body)
            VALUES (%s::uuid,'system','Verification Requested',
            'Your seller verification request has been submitted. We will review it within 24 hours.')""",
         (uid,),
@@ -1662,7 +1662,7 @@ def ai_chat(uid):
     if uid:
         try:
             db_execute(
-                """INSERT INTO dm_ai_chats (user_id, session_id, messages)
+                """INSERT INTO devmarket_ai_chats (user_id, session_id, messages)
                    VALUES (%s::uuid,%s,%s) ON CONFLICT DO NOTHING""",
                 (uid, session_id,
                  json.dumps(messages + [{"role": "assistant", "content": response}])),
