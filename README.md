@@ -118,17 +118,11 @@ Install dependencies:
 
 pip install -r requirements.txt
 
-Configure the required environment variables for the database, authentication, and Cloudinary integration.
 
 Start the development server:
 
 python server.py
 
-Security
-
-Production credentials should never be committed to source control.
-
-Database credentials, authentication secrets, Cloudinary credentials, and other sensitive configuration should be supplied through environment variables.
 
 Project Status
 
